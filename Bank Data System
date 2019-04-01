@@ -1,0 +1,712 @@
+#include <iostream>
+#include <string>
+#include <iomanip>
+#include "mysql_connection.h"
+#include <cppconn/prepared_statement.h>
+#include <cppconn/driver.h>
+#include <cppconn/statement.h>
+#include <cppconn/resultset.h>
+#include <cppconn/exception.h>
+
+using namespace std;
+using namespace sql; //The MySQL classes being used below reside in sql namespace
+
+					 // Defining Constant Variables
+#define SERVER "localhost"
+#define USER "root"
+#define PASSWORD "admin"
+#define DATABASE "Bank_Project3"
+
+					 //declared as universal variables
+Driver *driver; //If you don't use namespace sql above then use the syntax, sql::Driver *driver;
+Connection *con;
+Statement *stmt;
+ResultSet  *res;
+PreparedStatement *prep_stmt;
+
+// Functions to Establish the database's tables & information
+void createStatements();
+void insert_Employees();
+void insert_EmpPhone();
+void insert_Loans();
+void insert_Payments();
+void insert_Customers();
+void insert_Takes();
+void insert_CusPhone();
+void insert_Dependents();
+void insert_Accounts();
+void insert_Owns();
+void insert_Transactions();
+//------------------------------------------------------------
+void user_Employee();
+void user_Customer();
+//------------------------------------------------------------
+string get_eID();
+string get_cID();
+string get_accID(string);
+void customer_Deposit(string);
+void customer_Withdrawal(string);
+void delete_Account(string);
+void create_Loan(string);
+// For a manager
+void displayLoans();
+void displayEmployeePhones();
+void find_All_customerAccounts();
+// For a customer
+void find_my_Accounts(string);
+
+int main()
+{
+	try {
+
+		// Create a connection
+		driver = get_driver_instance();
+		con = driver->connect(SERVER, USER, PASSWORD);
+
+		stmt = con->createStatement();
+
+		stmt->execute("DROP DATABASE IF EXISTS " DATABASE);
+		stmt->execute("CREATE DATABASE " DATABASE);
+		stmt->execute("USE " DATABASE);
+
+		stmt->execute("DROP TABLE IF EXISTS information");
+
+		// Functions to fill in Database information
+		{
+			createStatements();
+			insert_Employees();
+			insert_EmpPhone();
+			insert_Loans();
+			insert_Payments();
+			insert_Customers();
+			insert_Takes();
+			insert_CusPhone();
+			insert_Dependents();
+			insert_Accounts();
+			insert_Owns();
+			insert_Transactions();
+		}
+		//option menu
+		int input;
+		do
+		{
+			cout << "Welcome to the Bank Application Simulation.\nBelow is your option menu.\n\n"
+				<< "1. Employee sign in\n"
+				<< "2. Customer Sign in\n"
+				<< "3. Close the application\n"
+				<< "Choice: ";
+			cin >> input;
+			cin.ignore();
+			while (input>3 || input<1)
+			{
+				cout << "Invalid input. Please re-enter.\n"
+					<< "Choice: ";
+				cin >> input;
+				cin.ignore();
+			}
+			switch (input)
+			{
+			case 1:
+				user_Employee();
+				break;
+			case 2:
+				user_Customer();
+				break;
+			case 3:
+				// GoodBye!
+				break;
+			}
+		} while (input != 3);
+		cout << "Thank you for using the Bank Application Simulation.\nHave a nice day!\n";
+
+		delete res;
+		delete stmt;
+		delete con;
+	}
+	catch (sql::SQLException &e) {
+		cout << "# ERR: SQLException in " << __FILE__;
+		cout << "(" << __FUNCTION__ << ") on line " << __LINE__ << endl;
+		cout << "# ERR: " << e.what();
+		cout << " (MySQL error code: " << e.getErrorCode();
+		cout << ", SQLState: " << e.getSQLState() << " )" << endl;
+	}
+
+	system("pause");
+	return 0;
+}
+
+// Database filling out functions-----------------------------
+void createStatements()
+{
+	// Create statements
+	stmt->execute("CREATE TABLE Employee(ID VARCHAR(5), first_name VARCHAR(20), middle_name VARCHAR(20), last_name VARCHAR(20),birthdate DATE, address VARCHAR(50), salary int, position VARCHAR(20), manager_ID VARCHAR(5), PRIMARY KEY(ID))");
+	stmt->execute("CREATE TABLE Emp_Phone(emp_ID VARCHAR(5), phone_num VARCHAR(20), PRIMARY KEY(emp_ID, phone_num),FOREIGN KEY(emp_ID) REFERENCES Employee(ID))");
+	stmt->execute("CREATE TABLE Loan(loan_num VARCHAR(10), loan_type VARCHAR(30), amount int, interest_rate int, collateral VARCHAR(20), emp_ID VARCHAR(5), PRIMARY KEY(loan_num, loan_type), FOREIGN KEY(emp_ID) REFERENCES Employee(ID))");
+	stmt->execute("CREATE TABLE Payments(payment_num numeric(10), loan_num VARCHAR(10), loan_type VARCHAR(30), amount int, due_date DATE, date_received DATE, PRIMARY KEY(payment_num, loan_num, loan_type), FOREIGN KEY(loan_num, loan_type) REFERENCES Loan(loan_num, loan_type))");
+	stmt->execute("CREATE TABLE Customer( ID VARCHAR(5),name varchar(50),address varchar(50),birthdate DATE, primary key(ID))");
+	stmt->execute("CREATE TABLE Takes(ID VARCHAR(5),loan_number VARCHAR(10),loan_type varchar(30),date DATE, primary key(ID, loan_number, loan_type),foreign key(loan_number, loan_type) references loan(loan_num, loan_type),foreign key(ID) references Customer(ID))");
+	stmt->execute("CREATE TABLE Customer_phone(Cus_ID VARCHAR(5),phone_num VARCHAR(20),PRIMARY KEY(Cus_ID, phone_num),FOREIGN KEY(Cus_ID) REFERENCES Customer(ID))");
+	stmt->execute("CREATE TABLE Dependent(name varchar(30),	cus_ID VARCHAR(5),gender varchar(10),birthdate DATE,	relationship varchar(30),	PRIMARY KEY(name, cus_ID),	FOREIGN KEY(cus_ID) REFERENCES Customer(ID)	)");
+	stmt->execute("CREATE TABLE Account(account_ID VARCHAR(6),account_type varchar(15),balance int, PRIMARY KEY(account_ID))");
+	stmt->execute("CREATE TABLE Owns(Cus_ID VARCHAR(5), account_ID VARCHAR(6), PRIMARY KEY(Cus_ID, account_ID),FOREIGN KEY(Cus_ID) REFERENCES Customer(ID),FOREIGN KEY(account_ID) REFERENCES Account(account_ID) on delete cascade)");
+	stmt->execute("CREATE TABLE Transaction(code numeric(5),type varchar(15), amount int, date DATE,account_ID VARCHAR(6),PRIMARY KEY(code),FOREIGN KEY(account_ID) REFERENCES Account(account_ID) on delete set NULL)");
+}
+
+void insert_Employees()
+{
+	//insert into Employee 
+	stmt->execute("INSERT INTO Employee VALUES('00001','William', 'James', 'Kulp', '98-09-23', '20 Clover Lane, Little Rock NY', 20000, 'janitor', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00002','Daniel', 'Johnson', 'Craig', '92-02-11', '20 Shroom Road, Little Rock CT', 30000, 'Teller', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00003','Tony', 'Derek III', 'Damien', '89-11-23', '13 Horrid Lane, Farfield CT', 35000, 'Janitor', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00004','Dimitri', 'Dash', 'Dak', '99-12-07', '20 Thunder Road, Farfield CT', 40000, 'Teller', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00005','Grubbs', 'Galileo', 'Duke', '92-08-11', '5 Sixth Street , Waterbury CT', 20000, 'Consultant', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00006','Draco', 'Sprout', 'Deleno', '94-04-13', '27 Blocks Way, Farfield CT', 35000, 'Teller', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00007','Danny', 'Liu', 'Leo', '94-11-23', '25 Petite Street, Farfield CT', 30000, 'Consultant', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00008','Datruth', 'Johnson', 'James', '92-08-11', '23 Woods Way, Farfield CT', 350000, 'janitor', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00009','Michael', 'Dash', 'Flash', '92-08-11', '35 Auto Lane, Chesire CT', 20000, 'Teller', '00010')");
+	stmt->execute("INSERT INTO Employee VALUES('00010','Cassandra', 'Nicole', 'Rubino', '92-08-11', '10 Nutmeg Crossing, Farfield CT', 50000, 'Manager', '00010')");
+}
+
+void insert_EmpPhone()
+{
+	//insert into Emp_phone 
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00001', '2039117654')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00002', '2037654321')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00003', '2035647189')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00004', '2566678996')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00005', '2345677654')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00006', '6736257849')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00007', '7563527283')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00008', '4847464756')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00009', '4846259887')");
+	stmt->execute("INSERT INTO Emp_Phone VALUES('00010', '6674625567')");
+}
+
+void insert_Loans()
+{
+	//insert into Loan 
+	stmt->execute("INSERT INTO Loan VALUES('1010100101','Vehicle',20000,6.00,'House','00010' )");
+	stmt->execute("INSERT INTO Loan VALUES('1000000001','Mortgage',300000, 7.50, NULL,'00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1000000011','Student Loan',10000, 9.50, NULL,'00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1000000015','Credit Line',5000, 12.50, 'House','00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1100000000','Mortgage',50000, 8.50, NULL, '00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1000000111','Vehicle',30000, 4.50, 'House','00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1000000123','Credit Line',10000, 10.50, 'BMW 2013', '00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1000001431','Mortgage',300000, 5.00, NULL, '00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1000011011','Refinance Mortgage',250000, 7.00, 'House','00010')");
+	stmt->execute("INSERT INTO Loan VALUES('1000001111','Mortgage',200000, 8.25, NULL,'00010')");
+}
+
+void insert_Payments()
+{
+	//insert into Payments
+	//Payments(payment_num numeric(10), loan_num numeric(10), loan_type VARCHAR(10), amount int, due_date DATE, date_received DATE, 
+	//PRIMARY KEY(payment_num, loan_num, loan_type), FOREIGN KEY(loan_num, loan_type) REFERENCES Loan(loan_num, loan_type))
+
+	stmt->execute("INSERT INTO Payments VALUES('1000000000','1010100101','Vehicle',5000,'17-12-10','17-11-29')");
+	stmt->execute("INSERT INTO Payments VALUES('1000000001','1010100101','Vehicle',15000,'17-12-10','17-12-01')");
+	stmt->execute("INSERT INTO Payments VALUES('2000000000','1000000001','Mortgage',10000,'25-05-10','15-10-15')");
+	stmt->execute("INSERT INTO Payments VALUES('3000000000','1000000011','Student Loan',2000,NULL,'17-05-29')");
+	stmt->execute("INSERT INTO Payments VALUES('3000000001','1000000011','Student Loan',4000,NULL,'13-11-01')");
+	stmt->execute("INSERT INTO Payments VALUES('6000000000','1000000111','Vehicle',20000,'20-10-10','17-01-29')");
+	stmt->execute("INSERT INTO Payments VALUES('6000000001','1000000111','Vehicle',5000,'17-12-10','17-06-10')");
+	stmt->execute("INSERT INTO Payments VALUES('7000000000','1000001431','Mortgage',20000,'25-12-01','12-11-10')");
+	stmt->execute("INSERT INTO Payments VALUES('7000000001','1000001431','Mortgage',30000,'25-12-01','13-12-29')");
+	stmt->execute("INSERT INTO Payments VALUES('9000000000','1000011011','Refinance Mortgage',10000,'30-12-01','17-02-09')");
+}
+
+void insert_Customers()
+{
+	//insert into customer 
+	//"CREATE TABLE Customer( ID numeric(5),name varchar(50),address varchar(50),birthdate DATE, primary key(ID))");
+	stmt->execute("INSERT INTO Customer VALUES('00001', 'Billy Jones', '20 Muller Street, Fairfield CT','82-02-10')");
+	stmt->execute("INSERT INTO Customer VALUES('00002', 'Jill Leahy', '34 Pine Hill, Fairfield CT', '90-12-21')");
+	stmt->execute("INSERT INTO Customer VALUES('00003', 'Jesus Jonathon','12 Thunder Lane, Chesire CT', '84-10-30')");
+	stmt->execute("INSERT INTO Customer VALUES('00004', 'James Lukasik', '27 Grand View Drive, Boulder NY', '79-03-12')");
+	stmt->execute("INSERT INTO Customer VALUES('00005', 'Andrew Kulp', '01 Hards Way, NY New York', '98-08-10')");
+	stmt->execute("INSERT INTO Customer VALUES('00006', 'Ciara Barret', '27 Woods Way, White Plains','57-10-20')");
+	stmt->execute("INSERT INTO Customer VALUES('00007', 'Ari Samson', '12 Erin Drive, Fishkill NY', '69-06-01')");
+	stmt->execute("INSERT INTO Customer VALUES('00008', 'Charles Ledda', '23 Woods Way, New Fairfield CT', '76-10-10')");
+	stmt->execute("INSERT INTO Customer VALUES('00009', 'Eliziel Joel', '5 Hardings Drive, New Fairfield', '56-03-07')");
+	stmt->execute("INSERT INTO Customer VALUES('00010', 'Jessica Jones', '56 Fish Lane, Chesire CT', '89-05-05')");
+	stmt->execute("INSERT INTO Customer VALUES('00011', 'Jessa Joes', '56 Fish Lane, Chesire CaT', '95-05-05')"); // remove
+}
+
+void insert_Takes()
+{
+	//insert into takes
+	//Takes(ID numeric(5),loan_number numeric(10),loan_type varchar(15),date DATE,
+	//primary key(ID, loan_number, loan_type),foreign key(loan_number, loan_type) references loan(loan_num, loan_type),foreign key(ID) references Customer(ID))");
+	stmt->execute("INSERT INTO Takes VALUES('00001', '1010100101','Vehicle', '05-09-10')");
+	stmt->execute("INSERT INTO Takes VALUES('00002', '1000000001','Mortgage', '09-03-30')");
+	stmt->execute("INSERT INTO Takes VALUES('00002', '1000000011','Student Loan', '07-10-20')");
+	stmt->execute("INSERT INTO Takes VALUES('00002', '1000000015','Credit Line', '02-12-09')");
+	stmt->execute("INSERT INTO Takes VALUES('00005', '1100000000','Mortgage', '01-12-09')");
+	stmt->execute("INSERT INTO Takes VALUES('00005', '1000000111','Vehicle','10-04-15')");
+	stmt->execute("INSERT INTO Takes VALUES('00006', '1000000123','Credit Line', '02-02-02')");
+	stmt->execute("INSERT INTO Takes VALUES('00007', '1000001431','Mortgage', '09-05-29')");
+	stmt->execute("INSERT INTO Takes VALUES('00009', '1000011011','Refinance Mortgage', '08-12-10')");
+	stmt->execute("INSERT INTO Takes VALUES('00008', '1000001111','Mortgage', '03-07-25')");
+}
+
+void insert_CusPhone()
+{
+	//insert into customer Phone 
+	//Customer_phone(Cus_ID numeric(5),phone_num int,PRIMARY KEY(Cus_ID, phone_num),FOREIGN KEY(Cus_ID) REFERENCES Customer(ID))"
+	stmt->execute("INSERT INTO Customer_phone VALUES('00001','2038765678')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00002','5467890001')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00003','6758904555')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00004','6676663777')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00005','8439903333')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00006','4563337333')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00007','7865666333')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00008','7869007575')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00009','5468776901')");
+	stmt->execute("INSERT INTO Customer_phone VALUES('00010','5678903451')");
+}
+
+void insert_Dependents()
+{
+	//insert into Dependent
+	//Dependent(name varchar(30),cus_ID numeric(5),gender varchar(10),birthdate DATE,	relationship varchar(30),
+	stmt->execute("INSERT INTO Dependent VALUES('Jonathon Rubin','00001', 'male', '74-06-06', 'son')");
+	stmt->execute("INSERT INTO Dependent VALUES('Mark Cuban','00001', 'male', '93-03-10', 'son')");
+	stmt->execute("INSERT INTO Dependent VALUES('Emilia Earheart','00001', 'female', '67-04-18', 'Mother')");
+	stmt->execute("INSERT INTO Dependent VALUES('Chris Christie','00003', 'male', '89-06-04', 'son')");
+	stmt->execute("INSERT INTO Dependent VALUES('Franklin Drilon','00004', 'male', '78-09-18', 'father')");
+	stmt->execute("INSERT INTO Dependent VALUES('Joel Villanueva','00001', 'male', '79-01-19', 'son')");
+	stmt->execute("INSERT INTO Dependent VALUES('Simon Biles','00008', 'female', '99-08-12', 'daughter')");
+	stmt->execute("INSERT INTO Dependent VALUES('Panfilo Lacson','00008', 'male', '90-09-02', 'son')");
+	stmt->execute("INSERT INTO Dependent VALUES('Richard Gordon','00003', 'female', '94-01-01', 'daughter')");
+	stmt->execute("INSERT INTO Dependent VALUES('Miguel Zubiri','00004', 'male', '96-03-20', 'son')");
+}
+
+void insert_Accounts()
+{
+	//insert into Account Owns(Cus_ID VARCHAR(5), account_ID VARCHAR(6)
+	//Account(account_ID numeric(6),account_ty'pe varchar(15),balance int
+
+	stmt->execute("INSERT INTO Account VALUES('000011', 'Checking', 1000)");
+	stmt->execute("INSERT INTO Account VALUES('000012', 'Savings', 100000)");
+	stmt->execute("INSERT INTO Account VALUES('000013', 'CD', 1000)");
+	stmt->execute("INSERT INTO Account VALUES('000014', 'Checking', 500)");
+	stmt->execute("INSERT INTO Account VALUES('000015', 'Savings', 10000)");
+	stmt->execute("INSERT INTO Account VALUES('000016', 'Checking', 4.53)");
+	stmt->execute("INSERT INTO Account VALUES('000017', 'Savings', 1000)");
+	stmt->execute("INSERT INTO Account VALUES('000018', 'Checking', 100)");
+	stmt->execute("INSERT INTO Account VALUES('000019', 'Checking', 54.7)");
+	stmt->execute("INSERT INTO Account VALUES('000020', 'Checking', 342)");
+}
+
+void insert_Owns()
+{
+	//insert into Owns
+	//Owns(Cus_ID VARCHAR(5),account_ID VARCHAR(6)
+	stmt->execute("INSERT INTO Owns VALUES('00001', '000011')");
+	stmt->execute("INSERT INTO Owns VALUES('00002', '000012')");
+	stmt->execute("INSERT INTO Owns VALUES('00003', '000013')");
+	stmt->execute("INSERT INTO Owns VALUES('00004', '000014')");
+	stmt->execute("INSERT INTO Owns VALUES('00005', '000015')");
+	stmt->execute("INSERT INTO Owns VALUES('00006', '000016')");
+	stmt->execute("INSERT INTO Owns VALUES('00007', '000017')");
+	stmt->execute("INSERT INTO Owns VALUES('00008', '000018')");
+	stmt->execute("INSERT INTO Owns VALUES('00009', '000019')");
+	stmt->execute("INSERT INTO Owns VALUES('00010', '000020')");
+}
+
+void insert_Transactions()
+{
+	//insert into Transaction
+	//Transaction(code numeric(5),type varchar(15), amount int, date DATE,account_ID numeric(6)
+	stmt->execute("INSERT INTO Transaction VALUES(10000, 'Withdraw',100 ,'10-06-12', '000011')");
+	stmt->execute("INSERT INTO Transaction VALUES(10001, 'Deposit', 1000,'99-09-26', '000012')");
+	stmt->execute("INSERT INTO Transaction VALUES(10002, 'Wthdraw',10,'00-08-30', '000013')");
+	stmt->execute("INSERT INTO Transaction VALUES(10003,'Deposit',29,'07-01-25', '000014')");
+	stmt->execute("INSERT INTO Transaction VALUES(10004,'Deposit',79,'07-11-08', '000015')");
+	stmt->execute("INSERT INTO Transaction VALUES(10005,'Withdraw',54,'12-01-02', '000016')");
+	stmt->execute("INSERT INTO Transaction VALUES(10006,'Deposit',459,'12-09-21', '000017')");
+	stmt->execute("INSERT INTO Transaction VALUES(10007,'Depsoit',5900,'15-01-05', '000018')");
+	stmt->execute("INSERT INTO Transaction VALUES(10008,'Withdraw',50,'16-03-05', '000019')");
+	stmt->execute("INSERT INTO Transaction VALUES(10009,'Withdraw',10,'16-10-03', '000020')");
+}
+//------------------------------------------------------------
+
+void user_Employee()
+{
+	string employee_id;
+	int input;
+	employee_id = get_eID();
+	if (employee_id != "")
+	{
+		cout << "Welcome. Below is the menu for Employees.\n\n";
+		do
+		{
+			cout << "Employee Menu\n"
+				<< "1. Display all loans and who took each\n"
+				<< "2. Display all employees and their phone numbers\n"
+				<< "3. Display all customers and their accounts\n"
+				<< "4. Create a loan for a customer\n"
+				<< "5. Sign out and return to menu\n"
+				<< "Choice: ";
+			cin >> input;
+			cin.ignore();
+			while (input>5 || input<1)
+			{
+				cout << "Invalid input. Please re-enter.\n"
+					<< "Choice: ";
+				cin >> input;
+				cin.ignore();
+			}
+			switch (input)
+			{
+			case 1:
+				displayLoans();
+				break;
+			case 2:
+				displayEmployeePhones();
+				break;
+			case 3:
+				find_All_customerAccounts();
+				break;
+			case 4:
+				create_Loan(employee_id);
+				break;
+			case 5:
+				// GoodBye!
+				break;
+			}
+		} while (input != 5);
+	}
+}
+
+void user_Customer()
+{
+	string customer_id;
+	int input;
+	customer_id = get_cID();
+	if (customer_id != "")
+	{
+		cout << "Welcome. Below is the menu for customers.\n\n";
+		do
+		{
+			cout << "Customer Menu\n"
+				<< "1. Make a deposit\n"
+				<< "2. Make a withdrawal\n"
+				<< "3. Display my accounts\n"
+				<< "4. Delete an account\n"
+				<< "5. Sign out and return to menu\n"
+				<< "Choice: ";
+			cin >> input;
+			cin.ignore();
+			while (input>5 || input<1)
+			{
+				cout << "Invalid input. Please re-enter.\n"
+					<< "Choice: ";
+				cin >> input;
+				cin.ignore();
+			}
+			switch (input)
+			{
+			case 1:
+				customer_Deposit(customer_id);
+				break;
+			case 2:
+				customer_Withdrawal(customer_id);
+				break;
+			case 3:
+				find_my_Accounts(customer_id);
+				break;
+			case 4:
+				delete_Account(customer_id);
+				break;
+			case 5:
+				// GoodBye!
+				break;
+			}
+		} while (input != 5);
+	}
+}
+//------------------------------------------------------------
+string get_eID()
+{
+	string id;
+	int input;
+	cout << "Please enter your ID: ";
+	getline(cin, id);
+	res = stmt->executeQuery("SELECT ID FROM Employee WHERE ID =" + id);
+	if (!res->next())
+	{
+		cout << "Employee ID not found in database.\n"
+			<< "1. Try again\n"
+			<< "2. Return to menu\n"
+			<< "Choice: ";
+		cin >> input;
+		cin.ignore();
+		while (input>2 || input<1)
+		{
+			cout << "Invalid input. Please re-enter.\n"
+				<< "Choice: ";
+			cin >> input;
+			cin.ignore();
+		}
+		switch (input)
+		{
+		case 1:
+			return get_eID();
+			break;
+		case 2:
+			return "";
+			break;
+		}
+	}
+	return id;
+}
+
+string get_cID()
+{
+	string id;
+	int input;
+	cout << "Please enter your customer ID: ";
+	getline(cin, id);
+	res = stmt->executeQuery("SELECT ID FROM Customer WHERE ID =" + id);
+	if (!res->next())
+	{
+		cout << "Customer ID not found in database.\n"
+			<< "1. Try again\n"
+			<< "2. Return to menu\n"
+			<< "Choice: ";
+		cin >> input;
+		cin.ignore();
+		while (input>2 || input<1)
+		{
+			cout << "Invalid input. Please re-enter.\n"
+				<< "Choice: ";
+			cin >> input;
+			cin.ignore();
+		}
+		switch (input)
+		{
+		case 1:
+			return get_cID();
+			break;
+		case 2:
+			return "";
+			break;
+		}
+	}
+	return id;
+}
+
+string get_accID(string c_id)
+{
+	string id;
+	int input;
+	cout << "Please enter ID of the account: ";
+	getline(cin, id);
+
+	prep_stmt = con->prepareStatement("SELECT account_ID FROM Owns WHERE Cus_ID = (?) AND account_ID = (?)");
+	prep_stmt->setString(1, c_id);
+	prep_stmt->setString(2, id);
+	res = prep_stmt->executeQuery();
+	if (!res->next())
+	{
+		cout << "account ID does not match any of your accounts.\n"
+			<< "1. Try again\n"
+			<< "2. Return to menu\n"
+			<< "Choice: ";
+		cin >> input;
+		cin.ignore();
+		while (input>2 || input<1)
+		{
+			cout << "Invalid input. Please re-enter.\n"
+				<< "Choice: ";
+			cin >> input;
+			cin.ignore();
+		}
+		switch (input)
+		{
+		case 1:
+			return get_accID(c_id);
+			break;
+		case 2:
+			return "";
+			break;
+		}
+	}
+	return id;
+}
+//------------------------------------------------------------
+void customer_Deposit(string id)
+{
+	int amount;
+	string account_id;
+	account_id = get_accID(id);
+	if (account_id != "")
+	{
+		cout << "Please enter amount to deposit: ";
+		cin >> amount;
+		cin.ignore();
+		prep_stmt = con->prepareStatement("UPDATE Account SET balance = balance + (?) WHERE account_ID = (?)");
+		prep_stmt->setInt(1, amount);
+		prep_stmt->setString(2, account_id);
+		prep_stmt->execute();
+		cout << "Updated succesfully\n";
+	}
+}
+
+void customer_Withdrawal(string id)
+{
+	int amount;
+	string account_id;
+	account_id = get_accID(id);
+	if (account_id != "")
+	{
+		do {
+			cout << "Please enter amount to withdraw: ";
+			cin >> amount;
+			cin.ignore();
+		} while (amount < 0);
+		prep_stmt = con->prepareStatement("SELECT balance FROM Account WHERE account_ID = (?)");
+		prep_stmt->setString(1, account_id);
+		res = prep_stmt->executeQuery();
+		while (res->next())
+		{
+			if ((res->getInt("balance")) < amount)
+			{
+				cout << "Cannot process withdraw:: insufficient funds.\n";
+			}
+			else
+			{
+				prep_stmt = con->prepareStatement("UPDATE Account SET balance = balance - (?) WHERE account_ID = (?)");
+				prep_stmt->setInt(1, amount);
+				prep_stmt->setString(2, account_id);
+				prep_stmt->execute();
+				cout << "Updated succesfully\n";
+			}
+		}
+	}
+}
+//------------------------------------------------------------
+// deletes a customer's account
+void delete_Account(string c_id)
+{
+	string account_id;
+	account_id = get_accID(c_id);
+	if (account_id != "")
+	{
+		prep_stmt = con->prepareStatement("DELETE FROM Account WHERE account_ID = (?)");
+		prep_stmt->setString(1, account_id);
+		prep_stmt->execute();
+		cout << "Account deleted\n";
+	}
+}
+
+// For creating a loan
+void create_Loan(string e_id)
+{
+	string c_id;
+	prep_stmt = con->prepareStatement("SELECT ID FROM Employee WHERE ID = (?) AND position = 'Manager'");
+	prep_stmt->setString(1, e_id);
+	res = prep_stmt->executeQuery();
+	if (!res->next())
+	{
+		cout << "You're not a manager.\n\n";
+	}
+	else
+	{
+		c_id = get_cID();
+		if (c_id != "")
+		{
+			string loan_num, loan_type, collateral;
+			int amount, interest_rate;
+
+			do
+			{
+				cout << "please enter an unused loan number" << endl;
+				getline(cin, loan_num);
+				prep_stmt = con->prepareStatement("Select loan_num from loan where loan_num = (?)");
+				prep_stmt->setString(1, loan_num);
+				res = prep_stmt->executeQuery();
+			} while (res->next());
+
+			cout << "Enter loan type" << endl;
+			getline(cin, loan_type);
+			cout << "Enter the collateral" << endl;
+			getline(cin, collateral);
+			do {
+				cout << "Please enter the amount: ";
+				cin >> amount;
+			} while (amount < 0);
+			do
+			{
+				cout << "Please enter the approved interest rate" << endl;
+				cin >> interest_rate;
+			} while (interest_rate < 0);
+
+			prep_stmt = con->prepareStatement("Insert into loan values( (?),(?),(?),(?),(?),(?) )");
+			prep_stmt->setString(1, loan_num);
+			prep_stmt->setString(2, loan_type);
+			prep_stmt->setInt(3, amount);
+			prep_stmt->setInt(4, interest_rate);
+			prep_stmt->setString(5, collateral);
+			prep_stmt->setString(6, e_id);
+			prep_stmt->execute();
+			//'1010100101','Vehicle',20000,6.00,'House','00010'
+			prep_stmt = con->prepareStatement("Insert into takes values( (?),(?),(?),'01-11-03' )");
+			prep_stmt->setString(1, c_id);
+			prep_stmt->setString(2, loan_num);
+			prep_stmt->setString(3, loan_type);
+			prep_stmt->execute();
+
+			cout << "Loan Created\n\n";
+		}
+	}
+}
+
+// Displays all loans in the database and the customer who owns the loan
+void displayLoans()
+{
+	res = stmt->executeQuery("select loan_num as 'Loan Number', takes.loan_type as 'Type', Amount, ID as 'Customer ID', name as 'Customer Name' from customer natural join takes join loan on loan_number = loan_num and takes.loan_type = loan.loan_type");
+	cout << left << setw(12) << "Loan Number" << setw(27) << "Type" << setw(12) << "Amount" << setw(7) << "ID" << setw(13) << "Customer Name\n";
+	while (res->next())
+	{
+		cout << left << setw(12) << res->getString("Loan Number") << setw(27) << res->getString("Type") << setw(12) << res->getString("Amount") << setw(7) << res->getString("Customer ID") << setw(52) << res->getString("Customer Name") << endl;
+	}
+}
+
+// Displays all employee phone numbers and the employee to which it corresponds
+void displayEmployeePhones()
+{
+	res = stmt->executeQuery("select last_name as 'Last Name',first_name as 'First Name', phone_num as 'Phone Number' from employee join emp_phone on id = emp_id");
+	cout << left << setw(42) << "Name" << setw(12) << "Phone Number\n";
+	while (res->next())
+	{
+		cout << left << setw(42) << res->getString("Last Name") + "," + res->getString("First Name") << setw(20) << res->getString("Phone Number") << endl;
+	}
+}
+
+// Finds all customers in the database and their corresponding accounts
+void find_All_customerAccounts()
+{
+	res = stmt->executeQuery("select account_id as 'Account Number', account_type as 'Type', Balance, id as 'Customer ID', name as 'Customer Name' from account natural join owns right outer join customer on cus_id = id order by id");
+	cout << left << setw(15) << "Account Number" << setw(16) << "Type" << setw(8) << "Balance" << setw(12) << "Customer ID" << "Customer Name\n";
+	while (res->next())
+	{
+		cout << left << setw(15) << res->getString("Account Number") << setw(16) << res->getString("Type") << setw(8) << res->getString("Balance") << setw(12) << res->getString("Customer ID") << setw(30) << res->getString("Customer Name") << endl;
+	}
+}
+
+// Finds all accounts associated with a customer
+void find_my_Accounts(string c_id)
+{
+	prep_stmt = con->prepareStatement("SELECT account_ID, account_type, balance FROM Owns NATURAL JOIN Account WHERE Cus_ID = (?)");
+	prep_stmt->setString(1, c_id);
+	res = prep_stmt->executeQuery();
+
+	cout << left << setw(12) << "Account ID" << setw(12) << "Balance" << "Type\n";
+	while (res->next())
+	{
+		cout << left << setw(12) << res->getString("account_ID") << setw(12) << res->getString("balance") << setw(12) << res->getString("account_type") << endl;
+	}
+	cout << endl << endl;
+}
